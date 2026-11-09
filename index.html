@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pernutam & Pac-Data: Caçador de Indicadores</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rye&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .font-arcade { font-family: 'Press Start 2P', cursive; }
+        .font-western { font-family: 'Rye', cursive; }
+        .font-sans { font-family: 'Inter', sans-serif; }
+
+        .arcade-box {
+            background-color: #0c0a09;
+            border: 4px solid #f59e0b;
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.4), inset 0 0 15px rgba(0,0,0,0.9);
+        }
+
+        .arcade-btn {
+            background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 5px 0 #78350f, 0 8px 15px rgba(0,0,0,0.6);
+            transition: all 0.1s ease;
+        }
+
+        .arcade-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 0 #78350f, 0 10px 20px rgba(245, 158, 11, 0.5);
+        }
+
+        .arcade-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0 #78350f;
+        }
+
+        .bg-grid {
+            background-image: radial-gradient(rgba(245, 158, 11, 0.15) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #gameCanvas {
+            background-color: #1c1917;
+            image-rendering: pixelated;
+        }
+
+        #confettiCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .table-custom {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
+
+        .table-custom th, .table-custom td {
+            border: 1px solid #78350f;
+            padding: 4px 8px;
+            text-align: center;
+        }
+
+        .table-custom th {
+            background-color: #451a03;
+            color: #fbbf24;
+        }
+
+        .table-custom td {
+            background-color: #1c1917;
+            color: #fef08a;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans select-none overflow-x-hidden bg-grid">
+
+    <canvas id="confettiCanvas"></canvas>
+
+    <!-- HEADER / SENAI CREDITS -->
+    <header class="w-full bg-slate-900/90 border-b-2 border-amber-500/50 p-2 md:p-3 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-3">
+                <span class="bg-amber-500 text-slate-950 font-arcade px-2 py-1 rounded text-[10px] font-bold">SENAI AFONSO PENA</span>
+                <span class="text-amber-400 font-semibold tracking-wider">TGDQ • Assistente Administrativo</span>
+            </div>
+            <div class="text-slate-400 text-center md:text-right text-[11px]">
+                <span class="text-amber-500/80 font-bold">Equipe:</span> Willian Cruz • Vitor Salles • Matheus Carvalho • Graziele Almeida
+            </div>
+        </div>
+    </header>
+
+    <!-- HUD / BARRA DE STATUS -->
+    <div id="hud" class="hidden w-full bg-slate-900 border-b border-amber-500/30 px-4 py-2.5 shadow-lg">
+        <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs font-arcade">
+            
+            <!-- Vidas (Balas) -->
+            <div class="flex items-center gap-2">
+                <span class="text-amber-400 text-[10px]">MUNITION:</span>
+                <div id="livesContainer" class="flex items-center gap-1"></div>
+            </div>
+
+            <!-- Fase Atual -->
+            <div class="bg-amber-500/20 border border-amber-500/40 px-3 py-1 rounded text-amber-300 text-[11px]" id="phaseLabel">
+                FASE 1: O SALOON
+            </div>
+
+            <!-- Modo Pistoleiro Timer -->
+            <div id="powerTimerContainer" class="hidden bg-yellow-400 text-slate-950 px-3 py-1 rounded font-bold animate-pulse text-[10px]">
+                🔥 MODO PISTOLEIRO: <span id="powerTimer">0</span>s
+            </div>
+
+            <!-- Placar -->
+            <div class="bg-slate-950 border border-amber-500/50 px-3 py-1 rounded">
+                <span class="text-slate-400 text-[9px]">PONTOS: </span>
+                <span id="scoreDisplay" class="text-yellow-400">0000</span>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN GAME CONTAINER -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-2 md:p-4 flex flex-col justify-center items-center relative my-2">
+
+        <!-- SCREEN 1: TELA INICIAL -->
+        <section id="startScreen" class="w-full arcade-box rounded-2xl p-6 md:p-8 text-center flex flex-col items-center justify-center relative overflow-hidden">
+            
+            <div class="mb-3 relative">
+                <svg width="100" height="100" viewBox="0 0 100 100" class="drop-shadow-[0_0_15px_rgba(245,158,11,0.6)]">
+                    <path d="M 10 42 C 30 38, 70 38, 90 42 C 95 43, 85 25, 75 22 C 65 20, 35 20, 25 22 C 15 25, 5 43, 10 42 Z" fill="#78350f" stroke="#f59e0b" stroke-width="2"/>
+                    <rect x="25" y="22" width="50" height="8" rx="2" fill="#d97706"/>
+                    <circle cx="50" cy="55" r="28" fill="#fde047"/>
+                    <path d="M 50 55 L 75 40 A 28 28 0 0 1 75 70 Z" fill="#0c0a09"/>
+                    <circle cx="45" cy="42" r="3.5" fill="#000"/>
+                </svg>
+            </div>
+
+            <h1 class="font-western text-3xl md:text-5xl text-amber-400 mb-1 tracking-wide">PERNUTAM & PAC-DATA</h1>
+            <h2 class="font-arcade text-xs text-yellow-200 mb-6 tracking-wider">CAÇADOR DE INDICADORES</h2>
+
+            <div class="bg-slate-900/90 border border-amber-500/30 p-4 rounded-xl text-left max-w-2xl mb-6 space-y-2.5 text-xs md:text-sm text-slate-300">
+                <p class="text-amber-300 font-bold flex items-center gap-2">
+                    🤠 HISTÓRIA DA MISSÃO:
+                </p>
+                <p>
+                    Você é <strong class="text-yellow-400">Paulo</strong>, o pistoleiro que trocou o revólver pelo teclado para eliminar planilhas corrompidas e fórmulas quebradas.
+                </p>
+                <div class="bg-amber-950/40 p-3 rounded-lg border border-amber-500/30 text-xs space-y-1">
+                    <div class="text-amber-400 font-bold mb-1">🎮 REGRAS DA GAMEPLAY PAC-MAN:</div>
+                    <p>• Use as <strong>Setas do Teclado / WASD (ou botões virtuais)</strong> para mover o Paulo.</p>
+                    <p>• O Paulo nasce exatamente no centro do labirinto.</p>
+                    <p>• Ao comer uma <strong>Bala de Prata Grande 🌟</strong>, abre um desafio com tabela de planilha!</p>
+                    <p>• <strong>Acertou:</strong> Ativa o <em>Modo Pistoleiro</em> para caçar os capangas por 8 segundos!</p>
+                    <p>• <strong>Fase 2:</strong> Capture o Xerife (com estrela ⭐) no Modo Pistoleiro para vencer a fase direto!</p>
+                    <p>• <strong>Errou ou encostou sem poder:</strong> Perde 1 munição 🔫.</p>
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="arcade-btn px-8 py-4 rounded-xl font-arcade text-sm text-slate-950 font-black tracking-wider uppercase cursor-pointer">
+                🤠 ENTRAR NO DESERTO E JOGAR
+            </button>
+
+            <div class="mt-6 text-[10px] text-slate-500 font-mono">
+                SENAI Afonso Pena • TGDQ 2026
+            </div>
+        </section>
+
+        <!-- SCREEN 2: TRANSIÇÃO DE FASE -->
+        <section id="transitionScreen" class="hidden w-full arcade-box rounded-2xl p-6 md:p-8 text-center flex flex-col items-center justify-center space-y-5">
+            <div class="text-5xl animate-bounce">📜</div>
+            <h1 class="font-western text-2xl md:text-4xl text-amber-400">FASE 2: O COFRE DO XERIFE</h1>
+            <p class="text-yellow-200 font-arcade text-xs">DESAFIO DO CHEFÃO DA DESORGANIZAÇÃO</p>
+            
+            <div class="bg-slate-900 border border-amber-500/40 p-4 rounded-xl max-w-lg text-left text-xs md:text-sm text-slate-300 space-y-2">
+                <p>Você salvou as contas do Saloon! Agora, Paulo invadiu o cofre secreto do Xerife Corrupto para desmascarar relatórios clonados e faturas fantasmas.</p>
+                <div class="bg-amber-950/60 p-2.5 rounded border border-amber-500/30 text-amber-300 font-mono text-xs">
+                    💡 <strong>DICA DE OURO:</strong> Na Fase 2, ao acertar a pergunta e entrar no Modo Pistoleiro, você pode devorar o <strong>Xerife (fantasma com estrela ⭐)</strong> para vencer a fase na hora!
+                </div>
+            </div>
+
+            <button onclick="startPhase2()" class="arcade-btn px-8 py-3.5 rounded-xl font-arcade text-xs text-slate-950 font-black tracking-wider uppercase cursor-pointer">
+                🔥 ENFRENTAR O XERIFE
+            </button>
+        </section>
+
+        <!-- SCREEN 3: GAME CANVAS DISPLAY -->
+        <section id="gameScreen" class="hidden w-full arcade-box rounded-2xl p-3 flex flex-col items-center gap-3 relative">
+            <div class="relative w-full flex justify-center">
+                <canvas id="gameCanvas" width="570" height="420" class="rounded-xl border-2 border-amber-500/50 shadow-2xl max-w-full h-auto"></canvas>
+            </div>
+
+            <!-- CONTROLES MOBILE / TOUCH -->
+            <div class="w-full max-w-xs grid grid-cols-3 gap-2 text-center text-slate-950 font-arcade text-xs">
+                <div></div>
+                <button onclick="handleTouchMove('UP')" class="bg-amber-500 active:bg-amber-600 p-3 rounded-lg shadow-md font-bold text-lg">▲</button>
+                <div></div>
+                <button onclick="handleTouchMove('LEFT')" class="bg-amber-500 active:bg-amber-600 p-3 rounded-lg shadow-md font-bold text-lg">◄</button>
+                <button onclick="handleTouchMove('DOWN')" class="bg-amber-500 active:bg-amber-600 p-3 rounded-lg shadow-md font-bold text-lg">▼</button>
+                <button onclick="handleTouchMove('RIGHT')" class="bg-amber-500 active:bg-amber-600 p-3 rounded-lg shadow-md font-bold text-lg">►</button>
+            </div>
+        </section>
+
+        <!-- POPUP QUESTION MODAL -->
+        <div id="questionModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="arcade-box rounded-2xl p-5 max-w-2xl w-full text-slate-100 space-y-4">
+                <div class="flex justify-between items-center border-b border-amber-500/40 pb-2">
+                    <span class="bg-amber-500 text-slate-950 font-arcade text-[10px] px-2 py-1 rounded font-bold">🎯 DESAFIO DE DADOS</span>
+                    <span id="questionCategory" class="text-amber-400 font-mono text-xs">Planilha Saloon</span>
+                </div>
+
+                <p id="questionText" class="font-arcade text-xs text-yellow-300 leading-relaxed"></p>
+
+                <!-- LAYOUT LADO A LADO: TABELA (ESQUERDA) + OPÇÕES (DIREITA) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                    <!-- PAINEL DA TABELA -->
+                    <div class="bg-slate-900 border border-amber-500/30 p-3 rounded-xl">
+                        <div class="text-[10px] text-amber-400 font-bold mb-2 font-mono">📊 VISUALIZAÇÃO DOS DADOS:</div>
+                        <div id="tableContainer"></div>
+                    </div>
+
+                    <!-- PAINEL DAS OPÇÕES -->
+                    <div id="optionsContainer" class="flex flex-col gap-2"></div>
+                </div>
+
+                <div id="questionFeedback" class="hidden p-3 rounded-lg text-xs font-mono font-bold"></div>
+            </div>
+        </div>
+
+        <!-- SCREEN 4: VICTORY TELA -->
+        <section id="victoryScreen" class="hidden w-full arcade-box rounded-2xl p-6 md:p-8 text-center flex flex-col items-center justify-center space-y-5">
+            <div class="text-6xl animate-bounce">🏆</div>
+            <h1 class="font-western text-3xl md:text-5xl text-amber-400">VITÓRIA IMPLACÁVEL!</h1>
+            
+            <div class="bg-amber-500/20 border-2 border-amber-400 px-6 py-3 rounded-xl">
+                <span class="font-western text-xl md:text-2xl text-amber-300">"LENDÁRIO MESTRE DAS PLANILHAS"</span>
+            </div>
+
+            <p class="text-slate-300 text-xs md:text-sm max-w-md">
+                Paulo derrotou o Xerife da Desorganização, corrigiu todas as fórmulas e salvou a empresa do caos financeiro!
+            </p>
+
+            <div class="bg-slate-900 border border-slate-700 p-4 rounded-xl flex items-center justify-around w-full max-w-xs font-arcade">
+                <div>
+                    <div class="text-[9px] text-slate-400">PONTUAÇÃO</div>
+                    <div id="finalScore" class="text-lg text-yellow-400">0000</div>
+                </div>
+            </div>
+
+            <button onclick="resetGame()" class="arcade-btn px-8 py-3.5 rounded-xl font-arcade text-xs text-slate-950 font-black tracking-wider uppercase cursor-pointer">
+                🔄 JOGAR NOVAMENTE
+            </button>
+        </section>
+
+        <!-- SCREEN 5: GAME OVER TELA -->
+        <section id="gameOverScreen" class="hidden w-full arcade-box rounded-2xl p-6 md:p-8 text-center flex flex-col items-center justify-center space-y-5 border-rose-600">
+            <div class="text-6xl animate-pulse">💀</div>
+            <h1 class="font-western text-3xl md:text-5xl text-rose-500">GAME OVER!</h1>
+            
+            <div class="bg-rose-950/80 border border-rose-500 p-5 rounded-xl max-w-md">
+                <p class="font-arcade text-xs text-rose-200 leading-relaxed">
+                    "Você foi demitido pelo xerife da desorganização!"
+                </p>
+                <p class="text-slate-400 text-xs mt-2">
+                    Suas munições acabaram. Revise suas fórmulas e tente novamente!
+                </p>
+            </div>
+
+            <button onclick="resetGame()" class="arcade-btn px-8 py-3.5 rounded-xl font-arcade text-xs text-slate-950 font-black tracking-wider uppercase cursor-pointer">
+                🎯 TENTAR NOVAMENTE
+            </button>
+        </section>
+
+    </main>
+
+    <footer class="w-full text-center py-3 text-[10px] text-slate-500 font-mono">
+        Game Dev Educacional • SENAI Afonso Pena • TGDQ 2026
+    </footer>
+
+    <!-- PAC-MAN WESTERN GAME ENGINE -->
+    <script>
+        const GRID_ROWS = 14;
+        const GRID_COLS = 19;
+        const CELL_SIZE = 30;
+
+        const MAP_TEMPLATE = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,1],
+            [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+            [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,0,1,1,3,1,1,0,1,0,1,1,0,1],
+            [1,0,0,0,0,1,0,3,3,3,3,3,0,1,0,0,0,0,1],
+            [1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+            [1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1],
+            [1,1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1],
+            [1,2,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,2,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        // 8 PERGUNTAS EXCLUSIVAS (4 NA FASE 1, 4 NA FASE 2)
+        const QUESTIONS_PHASE_1 = [
+            {
+                category: "Caderneta do Saloon • Erro de Soma",
+                question: "A caderneta de vendas do Saloon possui um erro na soma total da célula B5. Qual fórmula correta Paulo deve aplicar?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>A</th><th>B (Vendas)</th></tr></thead>
+                        <tbody>
+                            <tr><td>1. Whisky</td><td>150</td></tr>
+                            <tr><td>2. Entrada</td><td>200</td></tr>
+                            <tr><td>3. Refeição</td><td>50</td></tr>
+                            <tr><th>Total:</th><th style="color:#ef4444">#VALOR!</th></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "=SOMA(B1:B3)", correct: true },
+                    { text: "=SOMAR(B1+B3)", correct: false },
+                    { text: "=MAIS(B1..B3)", correct: false },
+                    { text: "=DIVIDIR(B1:B3)", correct: false }
+                ]
+            },
+            {
+                category: "Caderneta do Saloon • Sintaxe Básica",
+                question: "Na planilha de insumos, o valor digitado do café impede os cálculos. Qual o dado incorreto?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>Item</th><th>Qtd</th><th>Preço</th></tr></thead>
+                        <tbody>
+                            <tr><td>Feijão</td><td>10</td><td>R$ 20</td></tr>
+                            <tr><td>Café</td><td>5</td><td style="color:#ef4444">R$ ABC</td></tr>
+                            <tr><td>Carne</td><td>8</td><td>R$ 40</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "R$ ABC (Texto em campo numérico)", correct: true },
+                    { text: "Feijão (Coluna incorreta)", correct: false },
+                    { text: "Qtd 10 (Valor alto)", correct: false },
+                    { text: "Não existe nenhum erro", correct: false }
+                ]
+            },
+            {
+                category: "Caderneta do Saloon • Média",
+                question: "Paulo quer calcular a média de clientes diários do Saloon. Qual fórmula ele deve utilizar?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>Dia</th><th>Clientes</th></tr></thead>
+                        <tbody>
+                            <tr><td>Segunda</td><td>40</td></tr>
+                            <tr><td>Terça</td><td>60</td></tr>
+                            <tr><td>Quarta</td><td>50</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "=MÉDIA(B2:B4)", correct: true },
+                    { text: "=MEDIANA(B2+B4)", correct: false },
+                    { text: "=CALCULAR.MED(B2:B4)", correct: false },
+                    { text: "=SOMA(B2:B4)/0", correct: false }
+                ]
+            },
+            {
+                category: "Caderneta do Saloon • Ordenação",
+                question: "Como organizar a lista de suprimentos em ordem alfabética para facilitar a checagem do caixa?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>Produto</th></tr></thead>
+                        <tbody>
+                            <tr><td>Zinco</td></tr>
+                            <tr><td>Alvo</td></tr>
+                            <tr><td>Bala</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "Classificar de A a Z (Aba Dados)", correct: true },
+                    { text: "Usar a fórmula =ORDENAR()", correct: false },
+                    { text: "Deletar colunas não alfabéticas", correct: false },
+                    { text: "Aplicar auto-soma alfabética", correct: false }
+                ]
+            }
+        ];
+
+        const QUESTIONS_PHASE_2 = [
+            {
+                category: "Cofre do Xerife • PROCV",
+                question: "O Xerife ocultou uma fatura fantasma! Qual sintaxe do PROCV busca o código 'FAT-99' e retorna seu valor exato?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>Código</th><th>Valor</th></tr></thead>
+                        <tbody>
+                            <tr><td>FAT-01</td><td>R$ 500</td></tr>
+                            <tr><td>FAT-99</td><td>R$ 9.000</td></tr>
+                            <tr><td>FAT-02</td><td>R$ 150</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "=PROCV(\"FAT-99\"; A2:B4; 2; FALSO)", correct: true },
+                    { text: "=ENCONTRAR(\"FAT-99\")", correct: false },
+                    { text: "=SOMASE(A2:B4; \"FAT-99\")", correct: false },
+                    { text: "=BUSCAR.DADO(FAT-99)", correct: false }
+                ]
+            },
+            {
+                category: "Cofre do Xerife • Duplicatas",
+                question: "Para desmascarar e apagar faturas repetidas inseridas pelo Xerife, qual recurso das planilhas deve ser acionado?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>ID</th><th>Favorecido</th></tr></thead>
+                        <tbody>
+                            <tr style="color:#ef4444"><td>101</td><td>Xerife Corrupto</td></tr>
+                            <tr style="color:#ef4444"><td>101</td><td>Xerife Corrupto</td></tr>
+                            <tr><td>102</td><td>Banco Central</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "Remover Duplicadas (Aba Dados)", correct: true },
+                    { text: "Formatação Condicional Vermelha", correct: false },
+                    { text: "Fórmula =EXCLUIR()", correct: false },
+                    { text: "AutoSoma Dinâmica", correct: false }
+                ]
+            },
+            {
+                category: "Cofre do Xerife • CONT.SE",
+                question: "Paulo precisa contar quantas faturas acima de R$ 1.000 foram registradas no cofre. Qual função ele deve usar?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>Fatura</th><th>Valor</th></tr></thead>
+                        <tbody>
+                            <tr><td>01</td><td>R$ 1.200</td></tr>
+                            <tr><td>02</td><td>R$ 400</td></tr>
+                            <tr><td>03</td><td>R$ 3.000</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "=CONT.SE(B2:B4; \">1000\")", correct: true },
+                    { text: "=CONTAR.VALORES(\">1000\")", correct: false },
+                    { text: "=SOMAR.SE(B2:B4)", correct: false },
+                    { text: "=TOTAL.MAIOR(1000)", correct: false }
+                ]
+            },
+            {
+                category: "Cofre do Xerife • Validação",
+                question: "Para evitar que os capangas insiram valores negativos de propósito na planilha, qual ferramenta deve ser configurada?",
+                tableHtml: `
+                    <table class="table-custom">
+                        <thead><tr><th>Entrada de Caixa</th></tr></thead>
+                        <tbody>
+                            <tr style="color:#ef4444"><td>R$ -500 (Inválido!)</td></tr>
+                        </tbody>
+                    </table>
+                `,
+                options: [
+                    { text: "Validação de Dados (Aba Dados)", correct: true },
+                    { text: "Proteger Célula com Senha", correct: false },
+                    { text: "Formatação de Texto Simples", correct: false },
+                    { text: "Fórmula =ABS() Automática", correct: false }
+                ]
+            }
+        ];
+
+        // ENGINE VARS
+        let canvas, ctx;
+        let lives = 3;
+        let score = 0;
+        let currentPhase = 1;
+        let gameMap = [];
+        let dotsRemaining = 0;
+        let isPaused = false;
+        let powerMode = false;
+        let powerTimer = 0;
+        let powerInterval = null;
+        let questionIndex = 0;
+
+        let player = { x: 9, y: 8, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
+        let ghosts = [];
+        let gameLoopId = null;
+
+        window.onload = () => {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            document.addEventListener('keydown', handleKeyDown);
+        };
+
+        function startGame() {
+            lives = 3;
+            score = 0;
+            currentPhase = 1;
+            questionIndex = 0;
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('transitionScreen').classList.add('hidden');
+            document.getElementById('victoryScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+
+            loadPhase(1);
+        }
+
+        function loadPhase(phaseNum) {
+            currentPhase = phaseNum;
+            questionIndex = 0;
+            document.getElementById('phaseLabel').innerText = phaseNum === 1 ? 'FASE 1: O SALOON' : 'FASE 2: COFRE DO XERIFE (CHEFÃO)';
+            
+            gameMap = MAP_TEMPLATE.map(row => [...row]);
+
+            dotsRemaining = 0;
+            for (let r = 0; r < GRID_ROWS; r++) {
+                for (let c = 0; c < GRID_COLS; c++) {
+                    if (gameMap[r][c] === 0 || gameMap[r][c] === 2) {
+                        dotsRemaining++;
+                    }
+                }
+            }
+
+            // Paulo nasce no centro
+            player.x = 9;
+            player.y = 8;
+            player.dirX = 0;
+            player.dirY = 0;
+            player.nextDirX = 0;
+            player.nextDirY = 0;
+
+            if (phaseNum === 1) {
+                ghosts = [
+                    { x: 8, y: 5, color: '#ef4444', dirX: 1, dirY: 0, alive: true, isBoss: false },
+                    { x: 10, y: 5, color: '#38bdf8', dirX: -1, dirY: 0, alive: true, isBoss: false }
+                ];
+            } else {
+                ghosts = [
+                    { x: 8, y: 5, color: '#ef4444', dirX: 1, dirY: 0, alive: true, isBoss: false },
+                    { x: 10, y: 5, color: '#38bdf8', dirX: -1, dirY: 0, alive: true, isBoss: false },
+                    { x: 9, y: 6, color: '#f59e0b', dirX: 0, dirY: -1, alive: true, isBoss: true } // Chefão Xerife
+                ];
+            }
+
+            powerMode = false;
+            isPaused = false;
+            updateHUD();
+
+            if (gameLoopId) clearInterval(gameLoopId);
+            gameLoopId = setInterval(gameLoop, 180);
+        }
+
+        function startPhase2() {
+            document.getElementById('transitionScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            loadPhase(2);
+        }
+
+        function handleKeyDown(e) {
+            if (isPaused) return;
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { player.nextDirX = 0; player.nextDirY = -1; }
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { player.nextDirX = 0; player.nextDirY = 1; }
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { player.nextDirX = -1; player.nextDirY = 0; }
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { player.nextDirX = 1; player.nextDirY = 0; }
+        }
+
+        function handleTouchMove(dir) {
+            if (isPaused) return;
+            if (dir === 'UP') { player.nextDirX = 0; player.nextDirY = -1; }
+            if (dir === 'DOWN') { player.nextDirX = 0; player.nextDirY = 1; }
+            if (dir === 'LEFT') { player.nextDirX = -1; player.nextDirY = 0; }
+            if (dir === 'RIGHT') { player.nextDirX = 1; player.nextDirY = 0; }
+        }
+
+        function gameLoop() {
+            if (isPaused) return;
+
+            let newX = player.x + player.nextDirX;
+            let newY = player.y + player.nextDirY;
+
+            if (gameMap[newY] && gameMap[newY][newX] !== 1) {
+                player.dirX = player.nextDirX;
+                player.dirY = player.nextDirY;
+                player.x = newX;
+                player.y = newY;
+            } else {
+                newX = player.x + player.dirX;
+                newY = player.y + player.dirY;
+                if (gameMap[newY] && gameMap[newY][newX] !== 1) {
+                    player.x = newX;
+                    player.y = newY;
+                }
+            }
+
+            const currentCell = gameMap[player.y][player.x];
+            if (currentCell === 0) {
+                gameMap[player.y][player.x] = 3;
+                score += 10;
+                dotsRemaining--;
+                updateHUD();
+            } else if (currentCell === 2) {
+                gameMap[player.y][player.x] = 3;
+                dotsRemaining--;
+                triggerQuestionModal();
+                return;
+            }
+
+            if (dotsRemaining <= 0) {
+                if (currentPhase === 1) {
+                    triggerPhaseTransition();
+                } else {
+                    triggerVictory();
+                }
+                return;
+            }
+
+            moveGhosts();
+            checkCollisions();
+            draw();
+        }
+
+        function moveGhosts() {
+            ghosts.forEach(ghost => {
+                if (!ghost.alive) return;
+                
+                // Escolhe movimentação fluida através de caminhos disponíveis
+                const possibleMoves = [
+                    { x: 0, y: -1 }, { x: 0, y: 1 },
+                    { x: -1, y: 0 }, { x: 1, y: 0 }
+                ].filter(m => {
+                    const gx = ghost.x + m.x;
+                    const gy = ghost.y + m.y;
+                    // Evita voltar para trás no mesmo eixo para um movimento mais fluido
+                    const isOpposite = (m.x === -ghost.dirX && m.y === -ghost.dirY);
+                    return gameMap[gy] && gameMap[gy][gx] !== 1 && !isOpposite;
+                });
+
+                let chosenMove;
+                if (possibleMoves.length > 0) {
+                    chosenMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                } else {
+                    // Se estiver num beco sem saída, permite dar meia volta
+                    const backupMoves = [
+                        { x: 0, y: -1 }, { x: 0, y: 1 },
+                        { x: -1, y: 0 }, { x: 1, y: 0 }
+                    ].filter(m => {
+                        const gx = ghost.x + m.x;
+                        const gy = ghost.y + m.y;
+                        return gameMap[gy] && gameMap[gy][gx] !== 1;
+                    });
+                    if (backupMoves.length > 0) {
+                        chosenMove = backupMoves[Math.floor(Math.random() * backupMoves.length)];
+                    }
+                }
+
+                if (chosenMove) {
+                    ghost.dirX = chosenMove.x;
+                    ghost.dirY = chosenMove.y;
+                    ghost.x += chosenMove.x;
+                    ghost.y += chosenMove.y;
+                }
+            });
+        }
+
+        function checkCollisions() {
+            ghosts.forEach(ghost => {
+                if (!ghost.alive) return;
+                if (ghost.x === player.x && ghost.y === player.y) {
+                    if (powerMode) {
+                        ghost.alive = false;
+                        if (ghost.isBoss && currentPhase === 2) {
+                            score += 1000;
+                            triggerVictory();
+                        } else {
+                            score += 200;
+                            updateHUD();
+                        }
+                    } else {
+                        lives--;
+                        updateHUD();
+                        if (lives <= 0) {
+                            triggerGameOver();
+                        } else {
+                            player.x = 9;
+                            player.y = 8;
+                        }
+                    }
+                }
+            });
+        }
+
+        function triggerQuestionModal() {
+            isPaused = true;
+            const modal = document.getElementById('questionModal');
+            const questionsPool = currentPhase === 1 ? QUESTIONS_PHASE_1 : QUESTIONS_PHASE_2;
+            const q = questionsPool[questionIndex % questionsPool.length];
+            questionIndex++;
+
+            document.getElementById('questionCategory').innerText = q.category;
+            document.getElementById('questionText').innerText = q.question;
+            document.getElementById('tableContainer').innerHTML = q.tableHtml;
+            
+            const feedback = document.getElementById('questionFeedback');
+            feedback.classList.add('hidden');
+
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = '';
+
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "p-2.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 rounded-lg text-left text-xs font-mono transition flex items-center gap-2 text-slate-100 cursor-pointer w-full";
+                btn.innerHTML = `<span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">${String.fromCharCode(65 + idx)}</span> <span>${opt.text}</span>`;
+                btn.onclick = () => answerQuestion(opt.correct);
+                optionsContainer.appendChild(btn);
+            });
+
+            modal.classList.remove('hidden');
+        }
+
+        function answerQuestion(isCorrect) {
+            const feedback = document.getElementById('questionFeedback');
+            feedback.classList.remove('hidden');
+
+            if (isCorrect) {
+                score += 100;
+                feedback.className = "p-3 rounded-lg text-xs font-mono font-bold bg-emerald-950/90 border border-emerald-500 text-emerald-300";
+                feedback.innerHTML = "🎯 RESPOSTA CERTEIRA! Modo Pistoleiro ativado por 8 segundos!";
+                
+                activatePowerMode();
+                setTimeout(() => {
+                    document.getElementById('questionModal').classList.add('hidden');
+                    isPaused = false;
+                }, 1400);
+            } else {
+                lives--;
+                score = Math.max(0, score - 50);
+                feedback.className = "p-3 rounded-lg text-xs font-mono font-bold bg-rose-950/90 border border-rose-500 text-rose-300";
+                feedback.innerHTML = "💥 ERROU A FÓRMULA! Perdeu 1 munição!";
+                
+                updateHUD();
+                setTimeout(() => {
+                    document.getElementById('questionModal').classList.add('hidden');
+                    isPaused = false;
+                    if (lives <= 0) triggerGameOver();
+                }, 1400);
+            }
+        }
+
+        function activatePowerMode() {
+            powerMode = true;
+            powerTimer = 8;
+            document.getElementById('powerTimerContainer').classList.remove('hidden');
+            document.getElementById('powerTimer').innerText = powerTimer;
+
+            if (powerInterval) clearInterval(powerInterval);
+            powerInterval = setInterval(() => {
+                powerTimer--;
+                document.getElementById('powerTimer').innerText = powerTimer;
+                if (powerTimer <= 0) {
+                    clearInterval(powerInterval);
+                    powerMode = false;
+                    document.getElementById('powerTimerContainer').classList.add('hidden');
+                }
+            }, 1000);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let r = 0; r < GRID_ROWS; r++) {
+                for (let c = 0; c < GRID_COLS; c++) {
+                    const x = c * CELL_SIZE;
+                    const y = r * CELL_SIZE;
+
+                    if (gameMap[r][c] === 1) {
+                        ctx.fillStyle = '#78350f';
+                        ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                        ctx.strokeStyle = '#d97706';
+                        ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+                    } else {
+                        ctx.fillStyle = '#292524';
+                        ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+
+                        if (gameMap[r][c] === 0) {
+                            ctx.fillStyle = '#fef08a';
+                            ctx.beginPath();
+                            ctx.arc(x + CELL_SIZE / 2, y + CELL_SIZE / 2, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else if (gameMap[r][c] === 2) {
+                            ctx.fillStyle = '#f59e0b';
+                            ctx.beginPath();
+                            ctx.arc(x + CELL_SIZE / 2, y + CELL_SIZE / 2, 7, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.strokeStyle = '#fff';
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            ghosts.forEach(ghost => {
+                if (!ghost.alive) return;
+                const gx = ghost.x * CELL_SIZE + CELL_SIZE / 2;
+                const gy = ghost.y * CELL_SIZE + CELL_SIZE / 2;
+
+                ctx.fillStyle = powerMode ? '#1d4ed8' : ghost.color;
+
+                ctx.beginPath();
+                ctx.arc(gx, gy - 1, 9, Math.PI, 0, false);
+                ctx.lineTo(gx + 9, gy + 8);
+                ctx.lineTo(gx - 9, gy + 8);
+                ctx.fill();
+
+                // Chapéu do Capanga/Xerife
+                ctx.fillStyle = ghost.isBoss ? '#f59e0b' : '#451a03';
+                ctx.fillRect(gx - 11, gy - 12, 22, 3);
+                ctx.fillRect(gx - 6, gy - 16, 12, 4);
+
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(gx - 3, gy - 1, 2, 0, Math.PI * 2);
+                ctx.arc(gx + 3, gy - 1, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (ghost.isBoss) {
+                    ctx.fillStyle = '#fef08a';
+                    ctx.font = '10px font-arcade';
+                    ctx.fillText('⭐', gx - 4, gy - 17);
+                }
+            });
+
+            // Desenhar Paulo (Pac-Man de Chapéu)
+            const px = player.x * CELL_SIZE + CELL_SIZE / 2;
+            const py = player.y * CELL_SIZE + CELL_SIZE / 2;
+
+            let angle = 0;
+            if (player.dirX === 1) angle = 0;
+            if (player.dirX === -1) angle = Math.PI;
+            if (player.dirY === 1) angle = Math.PI / 2;
+            if (player.dirY === -1) angle = (3 * Math.PI) / 2;
+
+            ctx.fillStyle = powerMode ? '#facc15' : '#fde047';
+            ctx.beginPath();
+            ctx.arc(px, py, 11, angle + 0.2, angle + 2 * Math.PI - 0.2);
+            ctx.lineTo(px, py);
+            ctx.fill();
+
+            // Chapéu de Cowboy do Paulo
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(px - 13, py - 13, 26, 3);
+            ctx.fillRect(px - 7, py - 18, 14, 5);
+        }
+
+        function updateHUD() {
+            const container = document.getElementById('livesContainer');
+            container.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const isAvailable = i < lives;
+                const opacity = isAvailable ? 'opacity-100' : 'opacity-20 grayscale';
+                container.innerHTML += `
+                    <svg width="16" height="20" viewBox="0 0 20 28" class="${opacity}">
+                        <path d="M 10 2 C 14 6, 16 12, 16 18 L 4 18 C 4 12, 6 6, 10 2 Z" fill="${isAvailable ? '#f59e0b' : '#475569'}"/>
+                        <rect x="4" y="18" width="12" height="7" rx="1" fill="${isAvailable ? '#d97706' : '#334155'}"/>
+                    </svg>
+                `;
+            }
+            document.getElementById('scoreDisplay').innerText = String(score).padStart(4, '0');
+        }
+
+        function triggerPhaseTransition() {
+            clearInterval(gameLoopId);
+            isPaused = true;
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('transitionScreen').classList.remove('hidden');
+        }
+
+        function triggerVictory() {
+            clearInterval(gameLoopId);
+            isPaused = true;
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('victoryScreen').classList.remove('hidden');
+            document.getElementById('finalScore').innerText = String(score).padStart(4, '0');
+            launchConfetti();
+        }
+
+        function triggerGameOver() {
+            clearInterval(gameLoopId);
+            isPaused = true;
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        function resetGame() {
+            document.getElementById('victoryScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('startScreen').classList.remove('hidden');
+        }
+
+        function launchConfetti() {
+            const canvas = document.getElementById('confettiCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#f59e0b', '#fbbf24', '#38bdf8', '#ef4444', '#10b981'];
+            for (let i = 0; i < 100; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height - canvas.height,
+                    size: Math.random() * 8 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    speedY: Math.random() * 3 + 2,
+                    speedX: Math.random() * 2 - 1
+                });
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p) => {
+                    p.y += p.speedY;
+                    p.x += p.speedX;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                });
+                if (particles.some(p => p.y < canvas.height)) requestAnimationFrame(animate);
+            }
+            animate();
+        }
+    </script>
+</body>
+</html>
